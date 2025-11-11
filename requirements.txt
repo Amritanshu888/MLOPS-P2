@@ -3,6 +3,7 @@ pandas
 numpy
 pymongo ## Specifically will be used for data ingestion
 certifi
+scikit-learn
 
 -e .  ## This is responsible for triggering the setup.py file. ---> Automatically building all the packages
 # this -e . --> u can actually add at the last, when ur project is ready and u want to create the final package at that time u can finally put this.
