@@ -24,9 +24,14 @@ from networksecurity.entity.artifact_entity import (
     ModelTrainerArtifact
 )
 
+from networksecurity.constant.training_pipeline import TRAINING_BUCKET_NAME
+from networksecurity.cloud.s3_syncer import S3Sync
+from networksecurity.constant.training_pipeline import SAVED_MODEL_DIR
+
 class TrainingPipeline:
     def __init__(self):
         self.training_pipeline_config = TrainingPipelineConfig()
+        self.s3_sync = S3Sync()
 
     def start_data_ingestion(self):
         try:
@@ -76,6 +81,23 @@ class TrainingPipeline:
         
         except Exception as e:
             raise NetworkSecurityException(e,sys)
+
+    ## My local artifact is going to my S3 bucket.    
+    def sync_artifact_dir_to_s3(self):
+        try:
+            ## Here we are not using boto3 we are using AWS Cli --> Once we configure in VsCode just by using this function: "sync_folder_to_s3" -> It will automatically sync our local to the S3 itself.
+            aws_bucket_url = f"s3://{TRAINING_BUCKET_NAME}/artifact/{self.training_pipeline_config.timestamp}" ## This will be my bucket url whenver i need to upload my artifacts folder inside my S3 bucket.
+            self.s3_sync.sync_folder_to_s3(folder=self.training_pipeline_config.artifact_dir,aws_bucket_url=aws_bucket_url) ## Artifact dir passed here is our local folder. --> From the local_artifact_dir it is going to push everything in the AWS s3 bucket url.
+        except Exception as e:
+            raise NetworkSecurityException(e,sys)
+        
+    ## My local final model is getting pushed to s3 bucket.
+    def sync_saved_model_dir_to_s3(self):
+        try:
+            aws_bucket_url = f"s3://{TRAINING_BUCKET_NAME}/final_model/{self.training_pipeline_config.timestamp}" ## This final_model is nothing but my local folder over here.
+            self.s3_sync.sync_folder_to_s3(folder= self.training_pipeline_config.model_dir,aws_bucket_url=aws_bucket_url)
+        except Exception as e:
+            raise NetworkSecurityException(e,sys)          
         
     def run_pipeline(self):
         try:
@@ -83,6 +105,11 @@ class TrainingPipeline:
             data_validation_artifact = self.start_data_validation(data_ingestion_artifact=data_ingestion_artifact)
             data_transformation_artifact = self.start_data_transformation(data_validation_artifact=data_validation_artifact)
             model_trainer_artifact = self.start_model_trainer(data_transformation_artifact=data_transformation_artifact)
+
+            ## This will basically push everything to the S3 bucket
+            self.sync_artifact_dir_to_s3()
+            self.sync_saved_model_dir_to_s3()
+
             return model_trainer_artifact
         except Exception as e:
             raise NetworkSecurityException(e,sys)   
