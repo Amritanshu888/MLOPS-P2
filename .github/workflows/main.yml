@@ -1,0 +1,25 @@
+name: workflow
+## on means on what command i need to trigger my workflow.
+on:
+    push:  ## i.e. when pushed workflow will be triggered
+        branches:
+            - main  ## Which branches -> main
+        paths-ignore:
+            - 'README.md'    ## path ignore --> ignore this readme file.
+
+## Now we will start creating our jobs
+jobs:
+    integration:  ## First job is integration
+        name: Continious Integration  ## This is my job name
+        runs-on: ubuntu-latest  ## Job is running on ubuntu-latest(this is provided by the github-actions itself --> so that we will be able to run any integration testing code over here).
+        steps:
+            - name: Checkout Code   ## 1st step: checkout from this @v3 , this command will checkout the code from the github repository.
+              uses: actions/checkout@v3
+              
+            - name: Lint code    ## Then we will echo this Lint code linting repository
+              run: echo "Linting repository"
+              
+            - name: Run unit tests     ## And then we will run some unit test cases where i m just echoing right now. 
+              run: echo "Running unit tests"   ## If u want to run some unit_test cases u can create a file like test_(anything) and then automatically u can execute , u can install pytest library which will proabably do that entire task.continue-on-error: 
+
+## After writing this github_actions part just commit the code.
