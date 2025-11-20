@@ -22,4 +22,96 @@ jobs:
             - name: Run unit tests     ## And then we will run some unit test cases where i m just echoing right now. 
               run: echo "Running unit tests"   ## If u want to run some unit_test cases u can create a file like test_(anything) and then automatically u can execute , u can install pytest library which will proabably do that entire task.continue-on-error: 
 
+    build-and-push-ecr-image:
+        name: Continious Delivery ## Name of job as continious delivery , next after this we will have continious deployment(This will be towards EC2)
+        needs: integration   ## Here i have put the condition saying that the need is integration , this will start only after integration job gets executed. Once it gets success message from previous job only then it will go to the next job.
+        runs-on: ubuntu-latest  ## We are going to build the docker image in the ubuntu latest(provided by github-actions)
+        steps:
+            - name: Checkout Code   ## Here we will be checking out the entire code.
+              uses: actions/checkout@v3
+            
+            - name: Install Utilities
+              run: |   ## Here we are going to update some of the things.
+                sudo apt-get update  
+                sudo apt-get install -y jq unzip
+
+            - name: Configure AWS credentials  ## Then we will configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v1
+              with:
+                aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  ## We just have to update these secrets in github, once we configure the AWS credentials the next step will be that i have to login to the AWS ECR
+                aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Login to Amazon ECR  ## This login to AWS ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v1 
+
+            ## Now its time to push our image
+            - name: Build, tag, and push image to Amazon ECR
+              id: build-image
+              env:
+                ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} ## Taking the environment variables over here.
+                ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
+                IMAGE_TAG: latest
+              run: |
+                # Build a docker container and
+                # push it to ECR so that it can
+                # be deployed to ECS.
+                docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+                docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+                echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" 
+    
+    ## For Amazon EC2 deployment we will need another job
+    ## i.e. docker image in AWS ECR we will push it in AWS EC2 instance
+    Continious-Deployment:  ## This is my job name
+      needs: build-and-push-ecr-image  ## It needs build-and-push-ecr image that basically means after we complete continious delivery then only we have to go over continious deployment.
+      runs-on: self-hosted ## This will run on self-hosted(self-hosted is something that we are probably going to create i.e its a app runner --> this app runner what it does is that it keeps on listening whether we commit anything inside the github repository) --> This self-hosted we will basically go and create in our AWS-EC2 instance. It is just like an event-listener running in the cloud continiously listening whether any commits are happening in the github or not.
+      steps: 
+        - name: Checkout  ## Then we are doing checkout
+          uses: actions/checkout@v3
+
+        - name: Configure AWS credentials   ## Configuring AWS credentials(as we have to deploy it in the AWS EC2 instance)
+          uses: aws-actions/configure-aws-credentials@v1
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{ secrets.AWS_REGION }}
+
+        - name: Login to Amazon ECR   ## Again we have to login to our Amazon ECR(bcoz from amazon ECR only we are going to take the repository)
+          id: login-ecr
+          uses: aws-actions/amazon-ecr-login@v1
+
+        - name: Pull the latest image
+          run: |
+           docker pull ${{secrets.AWS_ECR_LOGIN_URI}}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
+
+        ##- name: Stop and remove container if running  --> If same name container is already running we can delete it and then proceed further. 
+        ##  run: |
+        ##  docker ps -q --filter "name=mltest" | grep -q . && docker stop mltest && docker rm -fv mltest
+
+        - name: Run Docker Image to serve users
+          run: |
+           docker run -d -p 8000:8000 --ipc="host" --name=networksecurity -e 'AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}' -e 'AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}' -e 'AWS_REGION=${{ secrets.AWS_REGION }}' ${{secrets.AWS_ECR_LOGIN_URI}}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
+          ## This entire docker will run as a container in my EC2 instance , Note that : What we have given above is entirely a docker image name  --> this docker will run in my EC2 instance
+
+        - name: Clean previous images and containers  ## Then i will clean w.r.t the previous images and containers
+          run: |
+           docker system prune -f   
+
+
+
+
+              
+## Also when u go in github actions of any particular repo there are lot of workflows that are available in github, if u click on New Workflow there u will be able to see many automatic workflows. U can also search for ECR or EC2 workflows. Like there is a seperate workflow for Deploy to Amazon ECS.
+## Now we have to create some secret keys
+## In ur repo click on settings ---> There u have secret and variables and in that u have actions click on it , there u will get to see secret and variables.
+## Click new repository secret, (it will ask us to give two things Name and Secret)
+## There u have to add ur AWS_ACCESS_KEY_ID , how to get AWS_ACCESS_KEY_ID ?? Mentioned in intro.ipynb(using IAM). Get the access key id add it in Secret. Click on add secret.          
+## Then similarily add AWS_SECRET_ACCESS_KEY , and then AWS Region(by default us-east-1).
+## Similarily we also create keys: AWS_ECR_LOGIN_URI and ECR_REPOSITORY_NAME and add there respective values.
+## Then commit all this.
+
+## After this u will be able to see the image(docker image pushed) in networksecurity repo in repositories in Amazon ECR.
+
+
 ## After writing this github_actions part just commit the code.

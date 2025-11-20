@@ -95,7 +95,7 @@ async def predict_route(request:Request,file:UploadFile=File(...)): ## With this
     
 ## Giving the entry point to run this
 if __name__ == "__main__":
-    app_run(app,host="localhost",port=8000)    
+    app_run(app,host="localhost",port=8000)    ## Also we can do , host ="0.0.0.0"
     
 ## To run ETL pipeline from scratch : Run the push_data.py file ---> To get the recent fresh data.
 # Run this file: python app.py --> in terminal  
